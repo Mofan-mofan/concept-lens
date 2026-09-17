@@ -7,7 +7,7 @@
 格式（标题、列表符号、句末标点），确认后先进编辑缓冲区，攒几处再一键生成新版本，
 历史版本能回退，最后导出 Markdown。
 
-![界面截图：左侧导入与文稿列表，中间正文里概念词就地带档，右侧词条卡与改写入口](assets/screenshot.png)
+![界面截图：顶栏是密度切换和版本条，左边导入与文稿列表，正文里几个概念词就地挂着 A 档标记](assets/screenshot.png)
 
 在线试用 <https://mofan-mofan.github.io/concept-lens/>，读的是仓库自带的示例文稿和公开版词条。
 本地用就 clone 下来双击 `index.html`，零安装；只有解 PDF 和问 AI 这两处要联网。
