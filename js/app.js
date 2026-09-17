@@ -280,7 +280,7 @@
         closeModal();
         if (window.QD_VERSION.restore(S.doc.id, v.ver)) {
           renderDoc();
-          window.alert(CFG.version.restoreOk.replace("{v}", v.ver));
+          window.alert(CFG.version.restoreOk.replace("{ver}", v.ver));
         }
       });
       row.appendChild(btn);
@@ -301,7 +301,7 @@
     var ver = list.length ? list[list.length - 1].ver : 1;
 
     var status = el("span", "vstatus",
-      CFG.version.currentVersion.replace("{v}", ver) + " · " +
+      CFG.version.currentVersion.replace("{ver}", ver) + " · " +
       CFG.version.bufferCount.replace("{n}", count));
     bar.appendChild(status);
 
@@ -372,9 +372,9 @@
     }
 
     if (report && report.skipped && report.skipped.length) {
-      window.alert(CFG.version.commitSkipped.replace("{v}", ver).replace("{n}", report.skipped.length));
+      window.alert(CFG.version.commitSkipped.replace("{ver}", ver).replace("{n}", report.skipped.length));
     } else {
-      window.alert(CFG.version.commitOk.replace("{v}", ver));
+      window.alert(CFG.version.commitOk.replace("{ver}", ver));
     }
     renderDoc();
   }
