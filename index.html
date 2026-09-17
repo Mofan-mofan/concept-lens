@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文档调试助手 · 导入金融/行研文档 → 看关键词 → AI 辅助调试修订</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/ask.css">
+</head>
+<body>
+
+<!--
+  纯静态页面：数据用 <script src> 引入（不是 fetch），所以双击本文件就能打开，
+  file:// 下不会被跨域策略挡住。除下面那一处 pdf.js 的 CDN，断网也能用。
+  脚本顺序不能改：config → guards → 词条/文档数据 → 引擎 → 检索 → 界面 → 导入。
+  数据各两份，后一份是前一份拿不到时的回退（js/app.js 里判定）：
+    词条  data/terms.js（本机全量，含指向私有笔记的定位字段）→ data/terms.public.js
+    正文  data/docs.js（本机私有文稿全文）→ data/docs.sample.js（仓库自带的本说明）
+  两份本机数据都不随仓库发布，所以 Pages 上跑的是示例文稿 + 公开版词条。
+-->
+
+<header class="topbar">
+  <div class="brand">
+    <h1 id="title">文档调试助手</h1>
+    <p id="subtitle"></p>
+  </div>
+
+  <div class="toolbar">
+    <div id="levels" class="levels"></div>
+    <div id="versionbar" class="versionbar"></div>
+    <span id="density" class="density"></span>
+    <div id="legend" class="legend"></div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <nav class="col-left">
+    <h2 class="col-title">选一份文稿</h2>
+    <div class="importbox">
+      <div class="import-title">导入 .md / .txt / .pdf 文档</div>
+      <div class="import-actions">
+        <button type="button" id="btn-file">选择文件</button>
+        <button type="button" id="btn-dir">选择文件夹</button>
+        <button type="button" id="btn-clear-imports" class="btn-ghost">清除导入记录</button>
+        <input id="file-pick" type="file" multiple accept=".md,.txt,.pdf,text/markdown,text/plain,application/pdf" hidden>
+        <input id="dir-pick" type="file" webkitdirectory accept=".md,.txt,.pdf,text/markdown,text/plain,application/pdf" hidden>
+      </div>
+      <div id="import-msg" class="import-msg"></div>
+    </div>
+    <div id="docs" class="doclist"></div>
+    <p class="foot">
+      词条来自<code>概念账本</code>那份分档清单，由 <code>build.py</code> 解析成
+      <code>data/terms.js</code>（本机全量）与 <code>data/terms.public.js</code>（公开版）。
+      缺词请去改清单再重跑，不要直接改 data 目录。
+    </p>
+  </nav>
+
+  <section class="col-main">
+    <article id="doc" class="doc"></article>
+  </section>
+
+  <aside class="col-right">
+    <div id="detail" class="detail hide"></div>
+  </aside>
+
+</main>
+
+<script src="js/config.js"></script>
+<script src="hand/guards.js"></script>
+<script src="data/terms.js"></script>
+<script src="data/terms.public.js"></script>
+<script src="data/docs.js"></script>
+<script src="data/docs.sample.js"></script>
+<script src="js/mark.js"></script>
+<script src="js/search.js"></script>
+<script src="js/app.js"></script>
+<script src="js/websearch.js"></script>
+<!-- 读 PDF 唯一需要的外部库；断网/CDN 不可达时 js/import.js 会跳过 PDF 并提示，其余功能不受影响 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (window.pdfjsLib) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
+<script src="js/import.js"></script>
+<script src="js/version.js"></script>
+<script src="js/md.js"></script>
+<script src="js/format.js"></script>
+<script src="js/ask.js"></script>
+</body>
+</html>

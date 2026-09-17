@@ -1,0 +1,17 @@
+# 私有语料：本机文稿全文与文件名清单，只在这里生成，绝不提交
+data/docs.js
+_audit.txt
+corpus.local.py
+
+# 全量词条与它的补录输入：里面的 where/src 是指向本机私有笔记的定位信息。
+# 随仓库发布的是 build.py 另生成的 data/terms.public.js。
+data/terms.js
+hand/terms_extra.js
+
+# 交付物导出件（md 是权威源）
+*.pdf
+
+# 本地环境产物
+__pycache__/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,167 @@
+/* 「问 AI」浮动聊天窗的全部样式。配色沿用 style.css 的 :root 变量。
+   这块 UI 的颜色/间距/字号只在这里改；交互逻辑在 js/ask.js，默认值在 js/config.js 的 ai 段，
+   回答的 Markdown 渲染在 js/md.js（对应的 md-* 类在文件末尾）。 */
+
+/* ── 浮标：选中正文后冒出来的「问 AI」 ─────────────────── */
+.qd-fab {
+  position: fixed; z-index: 60; display: none;
+  font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1;
+  color: #fff; background: var(--ink);
+  border: 0; border-radius: 999px; padding: 6px 12px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.22); cursor: pointer;
+}
+.qd-fab:hover { filter: brightness(1.3); }
+.qd-fab.qd-fab-edit { background: #7c3aed; }
+
+/* 拖动时全页禁用选中，免得拖窗口顺带选了一路文字 */
+body.qd-dragging { cursor: grabbing !important; }
+body.qd-dragging * { user-select: none !important; }
+
+/* ── 浮动窗 ───────────────────────────────────────────── */
+.qd-win {
+  position: fixed; z-index: 100; display: flex; flex-direction: column;
+  width: 400px; max-width: 94vw; height: min(620px, 82vh);
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.28); overflow: hidden;
+}
+
+/* 标题栏 = 拖动手柄 */
+.qd-bar {
+  display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+  padding: 8px 10px; background: var(--ink); color: #fff;
+  cursor: grab; user-select: none;
+}
+.qd-bar:active { cursor: grabbing; }
+.qd-title { font-weight: 700; font-size: 14px; }
+.qd-mode {
+  font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  background: rgba(255,255,255,.14); color: #fff;
+}
+.qd-mode.qd-mode-edit { background: #7c3aed; }
+.qd-badge {
+  font-size: 11px; color: #c9ced6; background: rgba(255,255,255,.12);
+  padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+}
+.qd-badge.warn { color: #ffe1e1; background: rgba(220,80,80,.4); }
+.qd-barbtns { margin-left: auto; display: flex; gap: 2px; }
+.qd-barbtn {
+  font: inherit; font-size: 12px; cursor: pointer;
+  background: none; border: 0; color: #dfe3e8; padding: 3px 8px; border-radius: 6px;
+}
+.qd-barbtn:hover { background: rgba(255,255,255,.16); color: #fff; }
+
+/* ── 设置抽屉 ─────────────────────────────────────────── */
+.qd-set { flex: 0 0 auto; border-bottom: 1px solid var(--line); background: #fcfcfd; padding: 10px 12px; }
+.qd-field { display: block; margin-bottom: 8px; }
+.qd-flabel { display: block; font-size: 11px; color: var(--ink-2); margin-bottom: 3px; }
+.qd-field input {
+  width: 100%; height: 30px; padding: 0 9px;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff; font: inherit; font-size: 13px;
+}
+.qd-field input:focus { outline: 2px solid var(--A-bg); border-color: var(--A); }
+.qd-btn {
+  font: inherit; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--ink); border-radius: 7px; background: var(--ink); color: #fff; padding: 5px 14px;
+}
+.qd-btn:hover { filter: brightness(1.25); }
+
+/* ── 消息区 ───────────────────────────────────────────── */
+.qd-thread { flex: 1 1 auto; overflow: auto; padding: 12px 12px 6px; background: var(--card); }
+.qd-empty { color: var(--ink-2); font-size: 12.5px; text-align: center; margin-top: 48px; line-height: 2; }
+
+.qd-msg { display: flex; margin: 9px 0; }
+.qd-user { justify-content: flex-end; }
+.qd-ai { justify-content: flex-start; }
+.qd-bubble {
+  max-width: 86%; padding: 8px 11px; font-size: 13.5px; line-height: 1.72;
+  border-radius: 12px; overflow-wrap: break-word;
+}
+.qd-user .qd-bubble { background: var(--A); color: #fff; border-bottom-right-radius: 3px; }
+.qd-ai .qd-bubble { background: #f3f5f8; color: var(--ink); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+
+/* 用户气泡里的引用原文 */
+.qd-quote {
+  background: rgba(255,255,255,.16); border-left: 2px solid rgba(255,255,255,.65);
+  padding: 4px 8px; border-radius: 4px; margin-bottom: 6px;
+  font-size: 12px; line-height: 1.6; color: rgba(255,255,255,.92);
+  white-space: pre-wrap; overflow-wrap: break-word; max-height: 92px; overflow: auto;
+}
+.qd-utext { white-space: pre-wrap; overflow-wrap: break-word; }
+.qd-typing { color: var(--ink-2); font-style: italic; }
+.qd-apply {
+  margin-top: 8px; display: block;
+  font: inherit; font-size: 12px; cursor: pointer;
+  border: 1px solid #7c3aed; border-radius: 6px;
+  background: #7c3aed; color: #fff; padding: 4px 10px;
+}
+.qd-apply:hover { filter: brightness(1.1); }
+/* 编辑确认区：AI 改写后先给用户编辑，再应用到缓冲区 */
+.qd-edit-confirm {
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);
+}
+.qd-edit-hint { font-size: 11px; color: var(--ink-2); margin-bottom: 5px; }
+.qd-edit-ta {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 13.5px; line-height: 1.7;
+  color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; padding: 8px 10px; resize: vertical; min-height: 190px;
+}
+.qd-edit-ta:focus { outline: none; border-color: #7c3aed; }
+.qd-edit-row { margin-top: 6px; display: flex; gap: 6px; justify-content: flex-end; }
+.qd-edit-row .qd-btn {
+  margin-top: 0; font: inherit; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink);
+  padding: 4px 10px;
+}
+.qd-edit-row .qd-btn:hover { border-color: #7c3aed; color: #7c3aed; filter: none; }
+.qd-edit-row .qd-apply { margin-top: 0; display: inline-block; }
+
+/* ── 输入区 ───────────────────────────────────────────── */
+.qd-composer { flex: 0 0 auto; border-top: 1px solid var(--line); background: #fbfbfc; padding: 8px 10px 10px; }
+.qd-status {
+  font-size: 12px; color: #9b2c2c; background: #fff6f6; border: 1px solid #f0caca;
+  border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
+  white-space: pre-wrap; overflow-wrap: break-word; max-height: 110px; overflow: auto;
+}
+.qd-ctx {
+  display: flex; align-items: center; gap: 6px; font-size: 11.5px;
+  background: var(--A-bg); border: 1px solid #cddcff; border-radius: 6px;
+  padding: 3px 6px; margin-bottom: 6px; color: var(--ink-2);
+}
+.qd-ctxlabel { color: var(--A); font-weight: 600; white-space: nowrap; }
+.qd-ctxtext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qd-ctxx { background: none; border: 0; cursor: pointer; color: var(--ink-2); font-size: 14px; line-height: 1; padding: 0 2px; }
+.qd-ctxx:hover { color: var(--ink); }
+.qd-inputrow { display: flex; align-items: flex-end; gap: 8px; }
+.qd-input {
+  flex: 1; resize: none; max-height: 140px; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  font: inherit; font-size: 13.5px; line-height: 1.5;
+}
+.qd-input:focus { outline: 2px solid var(--A-bg); border-color: var(--A); }
+.qd-send {
+  font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--A); border-radius: 8px; background: var(--A); color: #fff; padding: 7px 14px;
+}
+.qd-send:hover { filter: brightness(1.1); }
+.qd-send:disabled { opacity: .55; cursor: default; filter: none; }
+
+/* ── 回答里的 Markdown（js/md.js 产出） ───────────────── */
+.qd-md > *:first-child { margin-top: 0; }
+.qd-md > *:last-child { margin-bottom: 0; }
+.md-p { margin: 6px 0; }
+.md-h { font-weight: 700; font-size: 13.5px; margin: 10px 0 4px; }
+.md-list { margin: 6px 0; padding-left: 20px; }
+.md-list li { margin: 2px 0; }
+.md-quote { border-left: 3px solid #cfd5dd; background: rgba(0,0,0,.03); color: var(--ink-2); padding: 3px 10px; margin: 8px 0; }
+.md-hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+.md-a { color: #0969da; text-decoration: underline; }
+.md-code { background: rgba(0,0,0,.07); border-radius: 3px; padding: 0 4px; font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+.md-pre {
+  background: #1f2328; color: #e8eaed; border-radius: 7px; padding: 9px 11px;
+  margin: 8px 0; overflow: auto; font-size: 12px; line-height: 1.6;
+}
+.md-pre code { background: none; padding: 0; color: inherit; font-family: Consolas, "Cascadia Mono", monospace; }
+.md-tablewrap { overflow: auto; margin: 8px 0; }
+.md-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.md-table th, .md-table td { border: 1px solid var(--line); padding: 4px 7px; text-align: left; vertical-align: top; }
+.md-table th { background: #eef1f5; font-weight: 700; }
