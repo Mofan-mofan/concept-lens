@@ -245,6 +245,7 @@
       area: doc.area,
       path: doc.path,
       mtime: doc.mtime || 0,
+      kind: doc.kind || "",
       text: doc._text || ""
     };
   }
@@ -257,7 +258,9 @@
     a.forEach(function (rec) {
       if (!rec || !rec.id) return;
       try {
-        window.QD_APP.addDoc(buildDoc(rec.id, rec.name, rec.area, rec.path, rec.text || "", rec.mtime || 0));
+        var doc = buildDoc(rec.id, rec.name, rec.area, rec.path, rec.text || "", rec.mtime || 0);
+        if (rec.kind) doc.kind = rec.kind;
+        window.QD_APP.addDoc(doc);
         n += 1;
       } catch (e) {}
     });
@@ -265,7 +268,17 @@
   }
 
   function clearImports() {
+    // 先逐篇清掉历史版本与缓冲区：导入文档的 id 由「文件名+路径」哈希得出，是稳定的，
+    // 只删导入记录而不删版本，下次导入同一份文件时 ensureInit 会把旧版本的正文盖回来。
+    var a = loadRecords();
+    for (var i = 0; i < a.length; i++) {
+      var id = a[i] && a[i].id;
+      if (id != null && window.QD_VERSION && typeof window.QD_VERSION.purge === "function") {
+        window.QD_VERSION.purge(id);
+      }
+    }
     try { localStorage.removeItem(LS_IMPORTS); } catch (e) {}
+    if (window.QD_PDFSTORE) window.QD_PDFSTORE.clear();
   }
 
   // 删除单篇导入记录，并连带清掉它的缓冲区与历史版本（QD_VERSION.purge）。
@@ -278,6 +291,7 @@
     }
     saveRecords(kept);
     if (window.QD_VERSION && typeof window.QD_VERSION.purge === "function") window.QD_VERSION.purge(id);
+    if (window.QD_PDFSTORE) window.QD_PDFSTORE.del(id);
   }
 
   // ── 文件读取与界面提示 ────────────────────────────────
@@ -288,29 +302,7 @@
     m.className = "import-msg" + (cls ? " " + cls : "");
   }
 
-  // PDF 抽出来的文字往往带页眉页脚、行尾空格和大量空行；先规整成近似 markdown 源码，
-  // 再交给 parseMarkdown，保证存进 _text 的是干净可读的正文。
-  function pdfTextToMarkdown(text) {
-    var raw = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
-    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
-    var lines = raw.split("\n");
-    var out = [];
-    for (var i = 0; i < lines.length; i++) {
-      var ln = lines[i].replace(/[ \t\u00a0]+$/g, "");
-      var t = ln.replace(/^\s+|\s+$/g, "");
-      // 页码 / 页脚行：- 12 -、第 12 页、12 / 30 之类，整行只有它时丢掉
-      if (/^-\s*\d{1,4}\s*-$/.test(t)) continue;
-      if (/^第?\s*\d{1,4}\s*页/.test(t) && t.length <= 12) continue;
-      if (/^\d{1,4}\s*[/／]\s*\d{1,4}$/.test(t)) continue;
-      out.push(ln);
-    }
-    // 3 个以上连续换行压成 1 个空行，段落之间仍留分隔
-    return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\s+|\s+$/g, "") + "\n";
-  }
-
-  function isPdf(file) { return /\.pdf$/i.test(String(file && file.name || "")); }
-
-  // PDF：用 pdf.js（index.html 里从 CDN 引入）逐页抽文字，再走同一套 markdown 解析。
+  // PDF：用 pdf.js（index.html 里从 CDN 引入）逐页抽文字，按坐标还原版面后走同一套 markdown 解析。
   // 断网 / CDN 不可达时 window.pdfjsLib 不存在，这里给出明确提示，不影响其它功能。
   function readPdf(file, done) {
     if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") {
@@ -320,39 +312,29 @@
     var reader = new FileReader();
     reader.onerror = function () { done("读取失败：" + file.name, null); };
     reader.onload = function () {
+      var bin = reader.result.slice(0);   // 原件留一份存 IndexedDB，原版页面视图刷新后还要重画
       var data = new Uint8Array(reader.result);
       window.pdfjsLib.getDocument({ data: data }).promise.then(function (pdf) {
-        var total = pdf.numPages;
-        var pages = [];
-        function grab(n) {
-          if (n > total) {
-            var text = pdfTextToMarkdown(pages.join("\n\n"));
-            if (text.replace(/\s/g, "") === "") {
-              done("PDF 里没有可提取的文字（可能是扫描版/图片型）：" + file.name, null);
-              return;
-            }
-            done(null, makeDoc(file, text));
+        return window.QD_PDFLAYOUT.analyze(pdf).then(function (analysis) {
+          var text = analysis.markdown;
+          if (text.replace(/\s/g, "") === "") {
+            done("PDF 里没有可提取的文字（可能是扫描版/图片型）：" + file.name, null);
             return;
           }
-          pdf.getPage(n).then(function (page) {
-            return page.getTextContent();
-          }).then(function (content) {
-            var parts = [];
-            (content.items || []).forEach(function (it) {
-              parts.push(it.str == null ? "" : it.str);
-              if (it.hasEOL) parts.push("\n");   // 用 pdf.js 的换行标记还原行结构
-            });
-            pages.push(parts.join(""));
-            grab(n + 1);
-          }).catch(function () { grab(n + 1); });   // 单页失败就跳过，不整篇报废
-        }
-        grab(1);
+          var doc = makeDoc(file, text);
+          doc.kind = "pdf";
+          doc._pdfAnalysis = analysis;   // 行坐标与块映射，原版页面视图直接复用
+          if (window.QD_PDFSTORE) window.QD_PDFSTORE.put(doc.id, bin);
+          done(null, doc);
+        });
       }).catch(function (err) {
         done("解析 PDF 失败：" + file.name + "（" + ((err && err.message) || err) + "）", null);
       });
     };
     reader.readAsArrayBuffer(file);
   }
+
+  function isPdf(file) { return /\.pdf$/i.test(String(file && file.name || "")); }
 
   function readOne(file, done) {
     if (isPdf(file)) { readPdf(file, done); return; }
@@ -437,6 +419,10 @@
     // 先把上次的导入还原出来（app.js 已在更早的 DOMContentLoaded 里选好默认文档，
     // 这里只是把导入的文档追加进左栏列表，不打扰当前显示）。
     var restored = restoreImports();
+    // 还原的是「上次最后读的那篇」时，让 app.js 切回去并恢复阅读位置
+    if (restored && window.QD_APP && typeof window.QD_APP.applyLastDoc === "function") {
+      window.QD_APP.applyLastDoc();
+    }
 
     var filePick = document.getElementById("file-pick");
     var dirPick = document.getElementById("dir-pick");

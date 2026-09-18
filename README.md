@@ -16,12 +16,17 @@
 
 左边选文稿，或者导入自己的文件。中间是正文。右边是词条卡：释义、词频、让它现给一段白话解释、
 复制「拿这个词去问 AI」的话术。顶栏切标注密度（精简／标准／全量）和版本。
+PDF 默认按「原版页面」逐页还原排版（含表格与图表），可切到「文本流」再动刀改写。
+点一个概念词展开解释栏，再点同一个词就地收起。每篇文档的阅读位置（PDF 的两种视图各记各的）
+会记住，切走再切回、刷新重开都回到上次读的地方。
 
 ## 想改的话
 
 - 加词、改释义 → 改账本那份分档清单，重跑 `python build.py`。手改 `data/` 里生成的文件会被覆盖。
 - 标注太疏或太密 → `js/config.js` 的 `levels`。同形词误标 → `hand/guards.js`。
 - 改写稿的格式怎么规整 → `js/format.js`。版本与缓冲区 → `js/version.js`，两者都只写 localStorage。
+- PDF 版面解析与原版页面渲染 → `js/pdflayout.js`（坐标还原成行/表/段）＋ `js/pageview.js`（canvas 逐页画＋标注投影）；PDF 原件二进制存 IndexedDB（`js/pdfstore.js`），也只在本机。
+  阅读位置与视图偏好在 localStorage 的 `qd.scroll` / `qd.viewBy` / `qd.lastDoc`，删文档时连带清。
 - 问 AI 用哪个模型、提示词怎么写 → `js/config.js` 的 `ai`。API Key 填在界面上，只存本机浏览器。
   发给接口的只有你选中的那一段（上限 4000 字，`maxQuoteChars` 可调）加本轮对话，整篇文稿不出去；
   导入的文稿、编辑缓冲区和历史版本也都只在本机 localStorage 里。

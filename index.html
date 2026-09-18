@@ -79,7 +79,10 @@
 <!-- 读 PDF 唯一需要的外部库；断网/CDN 不可达时 js/import.js 会跳过 PDF 并提示，其余功能不受影响 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if (window.pdfjsLib) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
+<script src="js/pdfstore.js"></script>
+<script src="js/pdflayout.js"></script>
 <script src="js/import.js"></script>
+<script src="js/pageview.js"></script>
 <script src="js/version.js"></script>
 <script src="js/md.js"></script>
 <script src="js/format.js"></script>

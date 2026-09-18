@@ -13,7 +13,49 @@
   var byIdx = [];
   TERMS.forEach(function (t) { byIdx[t.idx] = t; });
 
-  var S = { doc: DOCS[0], level: CFG.defaultLevel, sel: null, q: "", sideTier: "" };
+  // ── localStorage 薄封装：隐私模式写失败就静默降级，不影响阅读 ──
+  function lsGet(k, dflt) {
+    try {
+      var v = localStorage.getItem(k);
+      return v == null ? dflt : JSON.parse(v);
+    } catch (e) { return dflt; }
+  }
+  function lsSet(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+  }
+
+  var S = { doc: DOCS[0], level: CFG.defaultLevel, sel: null, q: "", sideTier: "",
+    viewBy: lsGet("qd.viewBy", {}), pendingScroll: null, booted: false };
+
+  // ── 阅读位置记忆：按「文档id:视图」存 window 滚动偏移，切文档/换视图/刷新后恢复 ──
+  var SCROLL_CAP = 200;   // 最多记 200 个位置，超了丢最早的，防 localStorage 长毛
+  function scrollKeyOf(doc, view) { return doc.id + ":" + view; }
+  function saveScroll() {
+    var d = S.doc;
+    if (!S.booted || !d || d.id == null) return;
+    var map = lsGet("qd.scroll", {});
+    map[scrollKeyOf(d, viewOf(d))] = Math.round(window.scrollY ||
+      document.documentElement.scrollTop || 0);
+    var keys = Object.keys(map);
+    if (keys.length > SCROLL_CAP) {
+      keys.slice(0, keys.length - SCROLL_CAP).forEach(function (k) { delete map[k]; });
+    }
+    lsSet("qd.scroll", map);
+  }
+  function readScroll(doc, view) {
+    if (!doc || doc.id == null) return null;
+    var y = lsGet("qd.scroll", {})[scrollKeyOf(doc, view)];
+    return typeof y === "number" ? y : null;
+  }
+  // 渲染是逐步长高的（原版页面逐页追加），高度不够时先不跳，等下一页追加后再试；
+  // force 用于文本流这类同步渲染完的场景，或被钳住也直接落位。
+  function tryRestoreScroll(force) {
+    var y = S.pendingScroll;
+    if (y == null) return;
+    if (!force && document.documentElement.scrollHeight < y + window.innerHeight) return;
+    S.pendingScroll = null;
+    window.scrollTo(0, y);
+  }
   var modalMask = null;
 
   function el(tag, cls, txt) {
@@ -83,6 +125,12 @@
     a.title = txt + "｜" + CFG.tier[t].label + " " + e.tier + "｜" + e.gloss.slice(0, 46);
     a.addEventListener("click", function (ev) {
       ev.stopPropagation();
+      // 再点同一个词（任意一处出现）→ 收起整栏；点别的词照常切换内容
+      var box = document.getElementById("detail");
+      if (S.sel === e.idx && box && !box.classList.contains("hide")) {
+        closeTerm();
+        return;
+      }
       openTerm(e.idx, { fromSeg: segId, s: m.s, form: txt });
     });
     return a;
@@ -409,6 +457,34 @@
     }, 0);
   }
 
+  // PDF 文档的视图偏好：默认原版页面，其它文档只有文本流。
+  function viewOf(doc) {
+    if (!doc) return "text";
+    return S.viewBy[doc.id] || (doc.kind === "pdf" ? "page" : "text");
+  }
+
+  function addViewToggle(head, doc) {
+    if (!doc || doc.kind !== "pdf") return;
+    var bar = el("div", "viewtoggle");
+    [["page", "原版页面"], ["text", "文本流"]].forEach(function (p) {
+      var b = el("button", "lvbtn" + (viewOf(doc) === p[0] ? " on" : ""), p[1]);
+      b.type = "button";
+      b.title = p[0] === "page"
+        ? "按 PDF 原件逐页渲染：排版、表格、图表都是原样；标注与选区仍可用"
+        : "按块排布的文本：改格子、对比缓冲区用这个视图";
+      b.addEventListener("click", function () {
+        if (viewOf(doc) === p[0]) return;
+        saveScroll();
+        S.viewBy[doc.id] = p[0];
+        lsSet("qd.viewBy", S.viewBy);
+        S.pendingScroll = readScroll(doc, p[0]);
+        renderDoc();
+      });
+      bar.appendChild(b);
+    });
+    head.appendChild(bar);
+  }
+
   function renderDoc() {
     var doc = S.doc;
     if (window.QD_VERSION && doc && doc.id != null) {
@@ -432,6 +508,38 @@
         bh.map(function (h) { return h.form; }).filter(uniq).join("、") +
         "）被同形词护栏挡掉，规则见 hand/guards.js" : "")));
     main.appendChild(head);
+    addViewToggle(head, doc);
+
+    // PDF 文档默认给「原版页面」：逐页 canvas 还原排版与图表，覆盖层负责标注和选区。
+    // 二进制不在（隐私模式/未存上）或 pdf.js 不可用时自动回落文本流。
+    if (doc.kind === "pdf" && viewOf(doc) === "page" && window.QD_PAGEVIEW) {
+      var stagedCount = Object.keys(stagedMap).length;
+      if (stagedCount) {
+        main.appendChild(el("div", "pv-note",
+          "缓冲区里有 " + stagedCount + " 处待应用改动：原版页面只展示原件，切到「文本流」查看或继续改。"));
+      }
+      var holder = el("div", "pv-host");
+      main.appendChild(holder);
+      renderSidebar(res);
+      updateToolbar(res);
+      renderVersionBar();
+      window.QD_PAGEVIEW.render(doc, holder, {
+        res: res,
+        makeMark: makeMark,
+        isCurrent: function () { return S.doc === doc; },
+        onPageAppended: function () { tryRestoreScroll(false); }
+      }).then(function (ok) {
+        if (S.doc !== doc) return;   // 切走了：pending 属于新文档，别碰
+        if (ok) {
+          tryRestoreScroll(true);   // 全部页已落位，没到目标高度也强制落位
+        } else if (viewOf(doc) === "page") {
+          S.viewBy[doc.id] = "text";
+          lsSet("qd.viewBy", S.viewBy);
+          renderDoc();
+        }
+      });
+      return;
+    }
 
     var segs = res.segs;
     var byBlock = new Map();
@@ -511,6 +619,7 @@
     renderSidebar(res);
     updateToolbar(res);
     renderVersionBar();
+    tryRestoreScroll(true);   // 文本流是同步建完的，直接落位
   }
 
   // ── 侧栏：本篇摊开的概念清单 ───────────────────────────
@@ -634,6 +743,20 @@
   function setDetailOpen(open) {
     var layout = document.querySelector(".layout");
     if (layout) layout.classList.toggle("detail-open", !!open);
+  }
+
+  // 收起概念解释整栏：清选中词、清高亮，正文回到全宽
+  function closeTerm() {
+    S.sel = null;
+    var box = document.getElementById("detail");
+    if (box) {
+      box.innerHTML = "";
+      box.classList.add("hide");
+    }
+    setDetailOpen(false);
+    Array.prototype.forEach.call(document.querySelectorAll(".mk.sel"), function (n) {
+      n.classList.remove("sel");
+    });
   }
 
   function openTerm(idx, jump) {
@@ -819,10 +942,13 @@
       if (DOCS[i].id === id) { d = DOCS[i]; break; }
     }
     if (!d) return false;
+    saveScroll();   // 先把即将离开的这篇的位置记下来
     S.doc = d; S.sel = null; S.sideTier = "";
+    lsSet("qd.lastDoc", d.id);
     if (window.QD_VERSION && d && d.id != null) window.QD_VERSION.ensureInit(d);
     document.getElementById("detail").classList.add("hide");
     setDetailOpen(false);
+    S.pendingScroll = readScroll(d, viewOf(d));
     renderDocList();
     renderDoc();
     return true;
@@ -859,6 +985,12 @@
   function deleteImported(id) {
     if (!window.confirm("删除这篇导入的文档？它的待应用缓冲区和历史版本会一并清除（不影响你电脑上的原始文件）。")) return;
     if (window.QD_IMPORT && typeof window.QD_IMPORT.deleteRecord === "function") window.QD_IMPORT.deleteRecord(id);
+    // 这篇的阅读位置与视图偏好也一并清掉，别在 qd.scroll / qd.viewBy 里留孤儿
+    var smap = lsGet("qd.scroll", {});
+    Object.keys(smap).forEach(function (k) { if (k.split(":")[0] === String(id)) delete smap[k]; });
+    lsSet("qd.scroll", smap);
+    if (S.viewBy[id] != null) { delete S.viewBy[id]; lsSet("qd.viewBy", S.viewBy); }
+    if (lsGet("qd.lastDoc", null) === id) lsSet("qd.lastDoc", null);
     for (var i = 0; i < DOCS.length; i++) {
       if (DOCS[i].id === id) { DOCS.splice(i, 1); break; }
     }
@@ -886,6 +1018,17 @@
     document.getElementById("title").textContent = CFG.text.title;
     document.getElementById("subtitle").textContent = CFG.text.subtitle;
 
+    // 重开页面回到最后读的那篇、读到哪算哪
+    var last = lsGet("qd.lastDoc", null);
+    if (typeof last === "string") {
+      for (var i = 0; i < DOCS.length; i++) {
+        if (DOCS[i].id === last) { S.doc = DOCS[i]; break; }
+      }
+    }
+    S.pendingScroll = S.doc ? readScroll(S.doc, viewOf(S.doc)) : null;
+    S.booted = true;
+    window.addEventListener("pagehide", saveScroll);   // 刷新/关页前落一次位置
+
     if (S.doc && window.QD_VERSION && S.doc.id != null) window.QD_VERSION.ensureInit(S.doc);
     renderDocList();
     renderDoc();
@@ -898,7 +1041,15 @@
     addDoc: function (doc) { DOCS.push(doc); renderDocList(); },
     selectDoc: selectDoc,
     getDoc: function () { return S.doc; },
-    rerender: function () { renderDoc(); }
+    rerender: function () { renderDoc(); },
+    // 导入文档在 import.js 的 DOMContentLoaded（晚于本页 init）才挂回列表；
+    // 还原完毕后调这个入口，让「最后读的那篇是导入文档」时也能正确回到原位。
+    applyLastDoc: function () {
+      var last = lsGet("qd.lastDoc", null);
+      if (typeof last !== "string") return;
+      if (S.doc && S.doc.id === last) return;
+      selectDoc(last);
+    }
   };
 
   window.addEventListener("DOMContentLoaded", init);
